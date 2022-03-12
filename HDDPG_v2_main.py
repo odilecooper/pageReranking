@@ -1,15 +1,17 @@
-from open_data.config import *
-from open_data.data_process import *
+# -*- coding: utf-8 -*-
+from config import *
+from data_process import *
 import tensorflow as tf
 import numpy as np
 import random
-from open_data.HDDPG_Agent import meta_controller_DDPG, controller_DDPG
+from HDDPG_Agent import meta_controller_DDPG, controller_DDPG
 # from h_DDPG import meta_controller_DDPG, controller_DDPG
-from open_data.Env_model import *
+from Env_model import *
 from sklearn.externals import joblib
-from open_data.simulator.load_simulator import load_simulator
+from simulator.load_simulator import load_simulator
 import torch
 from tqdm import tqdm, trange
+TRAIN_EPOCHS = 5
 
 np.random.seed(1)
 tf.set_random_seed(1)
@@ -37,82 +39,96 @@ def train_hDDPG_with_pvpredict(PRINT_train = False, PRINT_test = False):
 
     sess.run(tf.global_variables_initializer())
 
-    sum_lla_reward_list = [0]
-    sum_hla_reward_list = [0]
-    action_feature_lla = []
 
     ########################## Train ##########################
     # high level environment proto-pv predict
-    for i in trange(int(MAX_EPISODES*split_rate)):
-        state_hla, label_canditate_16 = env_hla.reset()
+    for epoch in trange(TRAIN_EPOCHS):
+        sum_lla_reward_list = [0]
+        sum_hla_reward_list = [0]
+        action_feature_lla = []
+        for i in trange(int(MAX_EPISODES*split_rate)):
+            state_hla, label_canditate_16 = env_hla.reset()
 
-        proto_pv = high_level_agent.choose_action(state_hla)
+            upstream_pv = state_hla[:item_dim * env_hla.k]
+            upstream_pv = np.reshape(upstream_pv, (1, 28*6))
+            outputs = env_hla.simulator(torch.Tensor(upstream_pv)).detach().numpy()[0]
+            upstream_score = np.exp(outputs[1]) / (np.exp(outputs[0])+np.exp(outputs[1]))
 
-        # low level environment 16->6
-        lla_reward_list = []
-        state_lla = env_lla.reset(state=state_hla, label=label_canditate_16, goal=proto_pv, pointer=i)
-        low_level_agent.reset()
-        for j in range(env_lla.k):
-            while True:
-                proto_item_feature = low_level_agent.choose_action(state_lla)
-                proto_item_feature_index = env_lla.match_action_cluster(proto_item_feature, action_classifier)
-                if random.random() < c_EPSILON:
-                    c_EPSILON *= 0.995
-                    proto_item_feature_index = random.randint(0, env_lla.canditate_size-1)
-                    # 随机选取动作时使用cluster类中心替代a
-                    proto_item_feature = action_classifier.cluster_centers_[proto_item_feature_index]
-                if proto_item_feature_index not in env_lla.select_index:
+            proto_pv = high_level_agent.choose_action(state_hla)
+
+            # low level environment 16->6
+            lla_reward_list = []
+            state_lla = env_lla.reset(state=state_hla, label=label_canditate_16, goal=proto_pv, pointer=i)
+            low_level_agent.reset()
+            for j in range(env_lla.k):
+                while True:
+                    proto_item_feature = low_level_agent.choose_action(state_lla)
+                    proto_item_feature_index = env_lla.match_action_cluster(proto_item_feature, action_classifier)
+                    if random.random() < c_EPSILON:
+                        c_EPSILON *= 0.995
+                        proto_item_feature_index = random.randint(0, env_lla.canditate_size-1)
+                        # 随机选取动作时使用cluster类中心替代a
+                        proto_item_feature = action_classifier.cluster_centers_[proto_item_feature_index]
+                    if proto_item_feature_index not in env_lla.select_index:
+                        break
+
+                state_lla_, reward_lla, done = env_lla.step(action_index=proto_item_feature_index, pointer=i)
+                proto_item_feature = np.squeeze(proto_item_feature)
+                low_level_agent.store_transition(state_lla, proto_item_feature, reward_lla, state_lla_)
+
+                if low_level_agent.pointer > c_MEMORY_CAPACITY:
+                    low_level_agent.learn()
+                    # incremental update action classifier
+                    if i > 1000 and low_level_agent.pointer % c_MEMORY_CAPACITY == 0 and INCRE_update:
+                        action_feature = extract_action_feature_from_lla_memory(low_level_agent.memory)
+                        action_feature_lla.extend(action_feature)
+                        if len(action_feature_lla) % 3000 == 0:
+                            action_classifier.fit(action_feature)
+                            # joblib.dump(action_classifier,
+                            #             './data/action_classifier/kmeans/kmeans_hierachical_action_classfier' + str(
+                            #                 low_level_agent.pointer) + '.m')
+
+                lla_reward_list.append(reward_lla)  # 记录本轮lla奖励
+                if done:
+                    sum_lla_reward = (env_lla.total_reward + sum_lla_reward_list[-1])*i / (i+1) # 使用total_reward记录lla排好后的总奖励，reward_lla为差分奖励
+                    sum_lla_reward_list.append(sum_lla_reward) # 记录平均lla奖励
+
+                    # print('[LLA average reward]:', sum_lla_reward)
                     break
 
-            state_lla_, reward_lla, done = env_lla.step(action_index=proto_item_feature_index, pointer=i)
-            proto_item_feature = np.squeeze(proto_item_feature)
-            low_level_agent.store_transition(state_lla, proto_item_feature, reward_lla, state_lla_)
+                state_lla = state_lla_
 
-            if low_level_agent.pointer > c_MEMORY_CAPACITY:
-                low_level_agent.learn()
-                # incremental update action classifier
-                if i > 1000 and low_level_agent.pointer % c_MEMORY_CAPACITY == 0 and INCRE_update:
-                    action_feature = extract_action_feature_from_lla_memory(low_level_agent.memory)
-                    action_feature_lla.extend(action_feature)
-                    if len(action_feature_lla) % 3000 == 0:
-                        action_classifier.fit(action_feature)
-                        # joblib.dump(action_classifier,
-                        #             './data/action_classifier/kmeans/kmeans_hierachical_action_classfier' + str(
-                        #                 low_level_agent.pointer) + '.m')
+            state_hla_, label_, reward_hla, done = env_hla.step(state=state_hla, goal=proto_pv, action=env_lla.select_vec, lla_reward_list=lla_reward_list)
+            hla_score = reward_hla
 
-            lla_reward_list.append(reward_lla)  # 记录本轮lla奖励
-            if done:
-                sum_lla_reward = (env_lla.total_reward + sum_lla_reward_list[-1])*i / (i+1) # 使用total_reward记录lla排好后的总奖励，reward_lla为差分奖励
-                sum_lla_reward_list.append(sum_lla_reward) # 记录平均lla奖励
+            if hla_score > upstream_score or abs(hla_score-upstream_score) <= 1e-4:
+                env_lla.udpate_rel(action_index=proto_item_feature_index, pointer=i)
+                # env_hla.update_rel()
 
-                # print('[LLA average reward]:', sum_lla_reward)
-                break
+            # high_level_agent.store_transition(s=state_hla, a=proto_pv, r=reward_hla, s_=state_hla_) # 存放虚假的pv
+            high_level_agent.store_transition(s=state_hla, a=env_lla.select_vec, r=reward_hla, s_=state_hla_)
 
-            state_lla = state_lla_
+            if high_level_agent.pointer > MEMORY_CAPACITY:
+                high_level_agent.learn()
 
-        state_hla_, label_, reward_hla, done = env_hla.step(state=state_hla, goal=proto_pv, action=env_lla.select_vec, lla_reward_list=lla_reward_list)
+            sum_hla_reward = (sum_hla_reward_list[-1]*i + reward_hla)/(i+1)
+            sum_hla_reward_list.append(float(sum_hla_reward))
+            # print('[HLA average reward]:', sum_hla_reward)
 
-        # high_level_agent.store_transition(s=state_hla, a=proto_pv, r=reward_hla, s_=state_hla_) # 存放虚假的pv
-        high_level_agent.store_transition(s=state_hla, a=env_lla.select_vec, r=reward_hla, s_=state_hla_)
-
-        if high_level_agent.pointer > MEMORY_CAPACITY:
-            high_level_agent.learn()
-
-        sum_hla_reward = (sum_hla_reward_list[-1]*i + reward_hla)/(i+1)
-        sum_hla_reward_list.append(float(sum_hla_reward))
-        # print('[HLA average reward]:', sum_hla_reward)
+        if PRINT_train:
+            f = open('./data/reward/avg_hla_reward_0602.txt', 'a')
+            print('Epoch: ', epoch, '\n', file=f)
+            print(sum_hla_reward_list, '\n', file=f)
+            f.close()
+            f = open('./data/reward/avg_lla_reward_0602.txt', 'a')
+            print('Epoch: ', epoch, '\n', file=f)
+            print(sum_lla_reward_list, '\n', file=f)
+            f.close()
 
     if PRINT_train:
-        f = open('./data/reward/avg_hla_reward_0602.txt', 'w')
-        print(sum_hla_reward_list, file=f)
-        f = open('./data/reward/avg_lla_reward_0602.txt', 'w')
-        print(sum_lla_reward_list, file=f)
-
         saver = tf.train.Saver()
         saver.save(sess, "./data/model/HLA_LLA_with_kmeans_0618/HRL_0618.ckpt")
 
-    sum_lla_reward_list = [0]
-    sum_hla_reward_list = [0]
 
     ########################## Test ##########################
     # high level environment proto-pv predict
@@ -123,6 +139,8 @@ def train_hDDPG_with_pvpredict(PRINT_train = False, PRINT_test = False):
     reward_list = []
     reward_sum = 0
     dynamic_ndcg = 0
+    sum_lla_reward_list = [0]
+    sum_hla_reward_list = [0]
     for i in trange(int(split_rate * MAX_EPISODES), MAX_EPISODES):
         state_hla, label_canditate_16 = env_hla.reset()
 

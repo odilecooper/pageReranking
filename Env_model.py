@@ -1,11 +1,11 @@
-from open_data.config import *
+from config import *
 import numpy as np
-import open_data.data_process as dp
+import data_process as dp
 import math
 import random
 import torch
 import copy
-from open_data.simulator.load_simulator import load_simulator
+from simulator.load_simulator import load_simulator
 
 file_path = './data/criteo_pv_rec_normalFill.txt'
 # 16->6 场景建模
@@ -915,6 +915,45 @@ class Env_low_level(object):
 
         return max_index
 
+    def update_rel(self, action_index, pointer):
+        state = self.state
+        action_vec = state[self.item_dim * action_index: self.item_dim * (action_index + 1)].copy()
+        state[self.item_dim * action_index: self.item_dim * (action_index + 1)] = [-1] * self.item_dim
+
+        select_vec = self.select_vec
+        select_vec[self.item_dim * self.select_cnt: self.item_dim * (self.select_cnt + 1)] = action_vec
+        self.select_index.append(action_index)
+
+        pv = self.dataset[self.data_pointer]
+        item_list = []
+        for i in range(self.k):
+            item = item_vector_match_reward()
+            item.original_rank = i
+            item.item_feature = np.array(pv[i]['feature']).astype(np.float)
+            item.sum_key = np.sum(item.item_feature)
+            # rel_i = float(pv[i]['rel'])
+            # item.rel = rel_i
+            item_list.append(item)
+
+        for i in range(self.k):
+            action_i = select_vec[i*self.item_dim:(i+1)*self.item_dim]
+            if -1 in action_i: continue
+            action_i_sum_key = np.sum(action_i)
+            match = False
+            match_rel = 0
+            for j in range(self.k):
+                ideal_item = item_list[j]
+                if action_i_sum_key == ideal_item.sum_key:
+                    match = True
+                    # match_rel = ideal_item.rel
+                    break
+            if match is False: # in action, not in proto pv, raise rel
+                pv[i]['rel'] = 1.0
+
+        for i in range(self.k, self.canditate_size): # exposed, not in action, decline rel
+            if float(pv[i]['rel']) == 1.0:
+                pv[i]['rel'] = 0.5
+                
 class Env_high_level_v3(object):
     def __init__(self):
         self.data_pointer = 0

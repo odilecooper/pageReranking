@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from open_data.config import *
+from config import *
 
 
 ###############################  DDPG  ####################################

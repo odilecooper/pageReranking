@@ -1,4 +1,4 @@
-from open_data.config import *
+from config import *
 import pandas as pd
 import numpy as np
 import math

@@ -5,7 +5,7 @@ random.seed(1)
 from tqdm import trange
 from sklearn.cluster import KMeans, DBSCAN, MiniBatchKMeans
 from sklearn.externals import joblib
-from open_data.data_process import generate_action_feature, generate_hierachical_action_feature
+from data_process import generate_action_feature, generate_hierachical_action_feature
 
 def generate_kmeans_action_classfier(mode = 'h'):
     if mode == 'h':

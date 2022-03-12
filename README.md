@@ -7,7 +7,7 @@ The constructed data is stored in the `/data/` folder, and the file that uses Ga
 ## Evaluator
 The code of the evaluator used in this paper is stored in the `/simulator/` folder. 
 
-The implementation code of the model is in `model.py`, the loading code of the model is in `load_simulator.py`, and the pre-trained parameters are stored in `simulator.pkl`.
+The implementation code of the model is in `model.py`, the loading code of the model is in `load_simulator.py`, and the pre-trained parameters are stored in `simulator`.
 
 ## PP-HRL
 We use HMDP to model the page recommendation problem and use the PP-HRL model to solve it. 

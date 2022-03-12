@@ -1,12 +1,12 @@
-from open_data.config import *
-from open_data.data_process import *
+from config import *
+from data_process import *
 import tensorflow as tf
 import numpy as np
 import random
-from open_data.HDDPG_Agent import meta_controller_DDPG, controller_DDPG
-from open_data.Env_model import *
+from HDDPG_Agent import meta_controller_DDPG, controller_DDPG
+from Env_model import *
 from sklearn.externals import joblib
-from open_data.simulator.load_simulator import load_simulator
+from simulator.load_simulator import load_simulator
 import torch
 from tqdm import tqdm, trange
 

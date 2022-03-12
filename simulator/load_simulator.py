@@ -176,8 +176,7 @@ def load_simulator(input_size=28*6, hidden_size=64, output_size=1):
                  n_embedding=16, feedback_size=1, n_previous=5, n_heads=8,
                  use_embedding=False, use_history=False, use_attention=False, attention_type='self')
     # simulator = Simulator(input_size, hidden_size, output_size)
-    simulator.load_state_dict(torch.load('/Users/jiahaonan/Desktop/ali/open_data/simulator/simulator.pkl'))
-
+    simulator.load_state_dict(torch.load('/Users/shenxinyi/research/Ali2022/pageReranking/simulator/simulator.pkl'))
     '''
     inputs = np.zeros((6*28))
     inputs = torch.Tensor(inputs)
