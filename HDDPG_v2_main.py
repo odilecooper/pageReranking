@@ -60,6 +60,7 @@ def train_hDDPG_with_pvpredict(PRINT_train = False, PRINT_test = False):
             lla_reward_list = []
             state_lla = env_lla.reset(state=state_hla, label=label_canditate_16, goal=proto_pv, pointer=i)
             low_level_agent.reset()
+            proto_item_feature_index = None
             for j in range(env_lla.k):
                 while True:
                     proto_item_feature = low_level_agent.choose_action(state_lla)
@@ -71,7 +72,7 @@ def train_hDDPG_with_pvpredict(PRINT_train = False, PRINT_test = False):
                         proto_item_feature = action_classifier.cluster_centers_[proto_item_feature_index]
                     if proto_item_feature_index not in env_lla.select_index:
                         break
-
+                
                 state_lla_, reward_lla, done = env_lla.step(action_index=proto_item_feature_index, pointer=i)
                 proto_item_feature = np.squeeze(proto_item_feature)
                 low_level_agent.store_transition(state_lla, proto_item_feature, reward_lla, state_lla_)
@@ -102,7 +103,7 @@ def train_hDDPG_with_pvpredict(PRINT_train = False, PRINT_test = False):
             hla_score = reward_hla
 
             if hla_score > upstream_score or abs(hla_score-upstream_score) <= 1e-4:
-                env_lla.udpate_rel(action_index=proto_item_feature_index, pointer=i)
+                env_lla.update_rel(action_index=proto_item_feature_index, pointer=i)
                 # env_hla.update_rel()
 
             # high_level_agent.store_transition(s=state_hla, a=proto_pv, r=reward_hla, s_=state_hla_) # 存放虚假的pv

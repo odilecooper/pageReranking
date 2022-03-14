@@ -916,13 +916,7 @@ class Env_low_level(object):
         return max_index
 
     def update_rel(self, action_index, pointer):
-        state = self.state
-        action_vec = state[self.item_dim * action_index: self.item_dim * (action_index + 1)].copy()
-        state[self.item_dim * action_index: self.item_dim * (action_index + 1)] = [-1] * self.item_dim
-
         select_vec = self.select_vec
-        select_vec[self.item_dim * self.select_cnt: self.item_dim * (self.select_cnt + 1)] = action_vec
-        self.select_index.append(action_index)
 
         pv = self.dataset[self.data_pointer]
         item_list = []

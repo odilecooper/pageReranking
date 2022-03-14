@@ -20,8 +20,8 @@ LR_C = 0.0005    # learning rate for critic
 GAMMA = 0.9     # reward discount
 TAU = 0.01      # soft replacement
 
-MEMORY_CAPACITY = 500 #1000 #pvpre 400
-BATCH_SIZE = 64 #128 #pvpre 48
+MEMORY_CAPACITY = 400 #1000 #pvpre 400
+BATCH_SIZE = 48 #128 #pvpre 48
 
 # RENDER = False
 OUTPUT_GRAPH = True
@@ -30,7 +30,7 @@ EPSILON = 1  # control exploration
 
 state_dim = 28*16
 item_dim = 28
-action_dim = 28 #28(item预测) 28*6(pv预测)
+action_dim = 28*6 #28(item预测) 28*6(pv预测)
 action_bound = 1 # discard
 
 rnn_hidden_dim = 32
@@ -46,7 +46,7 @@ c_BATCH_SIZE = 64 # 64
 
 c_EPSILON = 1  # control exploration
 
-c_state_dim = 28*12 #28*6+28*6 #pvpre 28*16+28*6+28*6
+c_state_dim = 28*16+28*6+28*6 #28*6+28*6 #pvpre 28*16+28*6+28*6
 c_action_dim = 28
 c_action_bound = 1 # discard
 
