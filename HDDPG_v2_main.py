@@ -47,7 +47,7 @@ def train_hDDPG_with_pvpredict(PRINT_train = False, PRINT_test = False):
         sum_hla_reward_list = [0]
         action_feature_lla = []
         for i in trange(int(MAX_EPISODES*split_rate)):
-            state_hla, label_canditate_16 = env_hla.reset()
+            state_hla, label_canditate_16 = env_hla.reset(pointer=i)
 
             upstream_pv = state_hla[:item_dim * env_hla.k]
             upstream_pv = np.reshape(upstream_pv, (1, 28*6))
@@ -143,7 +143,7 @@ def train_hDDPG_with_pvpredict(PRINT_train = False, PRINT_test = False):
     sum_lla_reward_list = [0]
     sum_hla_reward_list = [0]
     for i in trange(int(split_rate * MAX_EPISODES), MAX_EPISODES):
-        state_hla, label_canditate_16 = env_hla.reset()
+        state_hla, label_canditate_16 = env_hla.reset(pointer=i)
 
         upstream_pv = state_hla[:item_dim * env_hla.k]
         upstream_pv = np.reshape(upstream_pv, (1, 28*6))

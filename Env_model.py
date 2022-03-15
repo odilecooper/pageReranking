@@ -611,13 +611,13 @@ class Env_high_level(object):
 
         return reward
 
-    def reset(self):
+    def reset(self, pointer):
         '''
 
         :return: initial observation(state): item*16, label: 3(曝光、点击、购买)*16
         '''
+        self.data_pointer = pointer
         observation = self.dataset[self.data_pointer]
-        self.data_pointer += 1
         state, label = self.to_state(copy.deepcopy(observation))
         self.sum_pv_price = 0
 
