@@ -11,7 +11,7 @@ from sklearn.externals import joblib
 from simulator.load_simulator import load_simulator
 import torch
 from tqdm import tqdm, trange
-TRAIN_EPOCHS = 3
+TRAIN_EPOCHS = 4
 
 np.random.seed(1)
 tf.set_random_seed(1)
@@ -43,6 +43,9 @@ def train_hDDPG_with_pvpredict(PRINT_train = False, PRINT_test = False):
     ########################## Train ##########################
     # high level environment proto-pv predict
     for epoch in trange(TRAIN_EPOCHS):
+        better = 0
+        reward_sum = 0
+        dynamic_ndcg = 0
         sum_lla_reward_list = [0]
         sum_hla_reward_list = [0]
         action_feature_lla = []
@@ -103,6 +106,7 @@ def train_hDDPG_with_pvpredict(PRINT_train = False, PRINT_test = False):
             hla_score = reward_hla
 
             if hla_score > upstream_score or abs(hla_score-upstream_score) <= 1e-4:
+                better += 1
                 env_lla.update_rel(action_index=proto_item_feature_index, pointer=i)
                 # env_hla.update_rel()
 
@@ -115,6 +119,15 @@ def train_hDDPG_with_pvpredict(PRINT_train = False, PRINT_test = False):
             sum_hla_reward = (sum_hla_reward_list[-1]*i + reward_hla)/(i+1)
             sum_hla_reward_list.append(float(sum_hla_reward))
             # print('[HLA average reward]:', sum_hla_reward)
+
+            reward_sum += hla_score
+            dynamic_ndcg += env_lla.total_reward
+
+        print('[Training epoch]: ', epoch)
+        print('[avg NDCG@6]: ', dynamic_ndcg / (MAX_EPISODES * split_rate))
+        print('[avg simulator score]: ', reward_sum/(MAX_EPISODES*split_rate))
+        print('[better percentage]: ', better/(MAX_EPISODES*split_rate))
+        print('------'*5)
 
         if PRINT_train:
             f = open('./data/reward/avg_hla_reward_0602.txt', 'a')
