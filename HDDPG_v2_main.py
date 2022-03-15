@@ -11,7 +11,7 @@ from sklearn.externals import joblib
 from simulator.load_simulator import load_simulator
 import torch
 from tqdm import tqdm, trange
-TRAIN_EPOCHS = 5
+TRAIN_EPOCHS = 3
 
 np.random.seed(1)
 tf.set_random_seed(1)
