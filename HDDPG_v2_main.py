@@ -40,9 +40,9 @@ def train_hDDPG_with_pvpredict(PRINT_train = False, PRINT_test = False):
     sess.run(tf.global_variables_initializer())
 
 
-    ########################## Train ##########################
-    # high level environment proto-pv predict
     for epoch in trange(TRAIN_EPOCHS):
+        ########################## Train ##########################
+        # high level environment proto-pv predict
         better = 0
         reward_sum = 0
         dynamic_ndcg = 0
@@ -123,7 +123,7 @@ def train_hDDPG_with_pvpredict(PRINT_train = False, PRINT_test = False):
             reward_sum += hla_score
             dynamic_ndcg += env_lla.total_reward
 
-        print('[Training epoch]: ', epoch)
+        print('------'*2, 'Training', '------'*2)
         print('[avg NDCG@6]: ', dynamic_ndcg / (MAX_EPISODES * split_rate))
         print('[avg simulator score]: ', reward_sum/(MAX_EPISODES*split_rate))
         print('[better percentage]: ', better/(MAX_EPISODES*split_rate))
@@ -139,94 +139,95 @@ def train_hDDPG_with_pvpredict(PRINT_train = False, PRINT_test = False):
             print(sum_lla_reward_list, '\n', file=f)
             f.close()
 
-    if PRINT_train:
         saver = tf.train.Saver()
-        saver.save(sess, "./data/model/HLA_LLA_with_kmeans_0618/HRL_0618.ckpt")
+        save_name = "./data/model/HLA_LLA_0618_" + int(epoch) + ".ckpt"
+        saver.save(sess, save_name)
 
 
-    ########################## Test ##########################
-    # high level environment proto-pv predict
-    base_gmv_list = 0
-    test_gmv_list = 0
-    better = 0
-    use_upstream = 0
-    reward_list = []
-    reward_sum = 0
-    dynamic_ndcg = 0
-    sum_lla_reward_list = [0]
-    sum_hla_reward_list = [0]
-    for i in trange(int(split_rate * MAX_EPISODES), MAX_EPISODES):
-        state_hla, label_canditate_16 = env_hla.reset(pointer=i)
+        ########################## Test ##########################
+        # high level environment proto-pv predict
+        base_gmv_list = 0
+        test_gmv_list = 0
+        better = 0
+        use_upstream = 0
+        reward_list = []
+        reward_sum = 0
+        dynamic_ndcg = 0
+        sum_lla_reward_list = [0]
+        sum_hla_reward_list = [0]
+        for i in trange(int(split_rate * MAX_EPISODES), MAX_EPISODES):
+            state_hla, label_canditate_16 = env_hla.reset(pointer=i)
 
-        upstream_pv = state_hla[:item_dim * env_hla.k]
-        upstream_pv = np.reshape(upstream_pv, (1, 28*6))
-        outputs = env_hla.simulator(torch.Tensor(upstream_pv)).detach().numpy()[0]
-        upstream_score = np.exp(outputs[1]) / (np.exp(outputs[0])+np.exp(outputs[1]))
+            upstream_pv = state_hla[:item_dim * env_hla.k]
+            upstream_pv = np.reshape(upstream_pv, (1, 28*6))
+            outputs = env_hla.simulator(torch.Tensor(upstream_pv)).detach().numpy()[0]
+            upstream_score = np.exp(outputs[1]) / (np.exp(outputs[0])+np.exp(outputs[1]))
 
-        # sum_price = 0
-        # for up_i in range(env_hla.k):
-        #     sum_price += upstream_pv[up_i*item_dim: (up_i+1)*item_dim][-5]
-        # upstream_gmv = sum_price * upstream_score / env_hla.k
-        # base_gmv_list += upstream_gmv
+            # sum_price = 0
+            # for up_i in range(env_hla.k):
+            #     sum_price += upstream_pv[up_i*item_dim: (up_i+1)*item_dim][-5]
+            # upstream_gmv = sum_price * upstream_score / env_hla.k
+            # base_gmv_list += upstream_gmv
 
-        proto_pv = high_level_agent.choose_action(state_hla)
+            proto_pv = high_level_agent.choose_action(state_hla)
 
-        # low level environment 16->6
-        lla_reward_list = []
-        state_lla = env_lla.reset(state=state_hla, label=label_canditate_16, goal=proto_pv, pointer=i)
-        for j in range(env_lla.k):
-            while True:
-                proto_item_feature = low_level_agent.choose_action(state_lla)
-                proto_item_feature_index = env_lla.match_action_cluster(proto_item_feature, action_classifier)
-                # if random.random() < 0.05:
-                #     proto_item_feature_index = random.randint(0, env_lla.canditate_size-1)
+            # low level environment 16->6
+            lla_reward_list = []
+            state_lla = env_lla.reset(state=state_hla, label=label_canditate_16, goal=proto_pv, pointer=i)
+            for j in range(env_lla.k):
+                while True:
+                    proto_item_feature = low_level_agent.choose_action(state_lla)
+                    proto_item_feature_index = env_lla.match_action_cluster(proto_item_feature, action_classifier)
+                    # if random.random() < 0.05:
+                    #     proto_item_feature_index = random.randint(0, env_lla.canditate_size-1)
 
-                if proto_item_feature_index not in env_lla.select_index:
+                    if proto_item_feature_index not in env_lla.select_index:
+                        break
+
+                state_lla_, reward_lla, done = env_lla.step(action_index=proto_item_feature_index, pointer=i)
+
+                lla_reward_list.append(reward_lla)  # 记录本轮lla奖励
+                if done:
+                    sum_lla_reward = (env_lla.total_reward + sum_lla_reward_list[-1])*i / (i+1) # 使用total_reward记录lla排好后的总奖励，reward_lla为差分奖励
+                    sum_lla_reward_list.append(sum_lla_reward) # 记录平均lla奖励
+                    # if PRINT_test:
+                    #     print('[LLA average reward]:', sum_lla_reward)
                     break
 
-            state_lla_, reward_lla, done = env_lla.step(action_index=proto_item_feature_index, pointer=i)
+                state_lla = state_lla_
 
-            lla_reward_list.append(reward_lla)  # 记录本轮lla奖励
-            if done:
-                sum_lla_reward = (env_lla.total_reward + sum_lla_reward_list[-1])*i / (i+1) # 使用total_reward记录lla排好后的总奖励，reward_lla为差分奖励
-                sum_lla_reward_list.append(sum_lla_reward) # 记录平均lla奖励
-                # if PRINT_test:
-                #     print('[LLA average reward]:', sum_lla_reward)
-                break
+            if i == MAX_EPISODES - 1: break
+            state_hla_, label_, reward_hla, done = env_hla.step(state=state_hla, goal=proto_pv, action=env_lla.select_vec, lla_reward_list=lla_reward_list, mode='test')
+            # test_list.append(reward_hla) # 收集simulator打分，测试better%
+            hla_score = reward_hla
 
-            state_lla = state_lla_
-
-        if i == MAX_EPISODES - 1: break
-        state_hla_, label_, reward_hla, done = env_hla.step(state=state_hla, goal=proto_pv, action=env_lla.select_vec, lla_reward_list=lla_reward_list, mode='test')
-        # test_list.append(reward_hla) # 收集simulator打分，测试better%
-        hla_score = reward_hla
-
-        reward_sum += hla_score
-        dynamic_ndcg += env_lla.total_reward
-        # if i % 50 == 0:
-        #     reward_list.append(reward_sum)
-
-        if upstream_score > 0.8:
-            use_upstream += 1
-
-        if hla_score > upstream_score or abs(hla_score-upstream_score) <= 1e-4:
-            better += 1
-
-        if PRINT_test:
-            print('[upstream vs PP-HRL]: ', upstream_score, hla_score)
-            print('[better]', better)
-            print('[use upstream]', use_upstream)
-            print('--'*10)
+            reward_sum += hla_score
+            dynamic_ndcg += env_lla.total_reward
             # if i % 50 == 0:
-            #     tt = input('pause')
+            #     reward_list.append(reward_sum)
 
-    # f = open('./data/result/criteo_farFill/pp_hddpg_reward.txt', 'w')
-    # print(reward_list, file=f)
+            if upstream_score > 0.8:
+                use_upstream += 1
 
-    print('[avg NDCG@6]: ', dynamic_ndcg / (MAX_EPISODES * (1 - split_rate)))
-    print('[avg simulator score]: ', reward_sum/(MAX_EPISODES*(1-split_rate)))
-    print('[better percentage]: ', better/(MAX_EPISODES*(1-split_rate)))
-    print('------'*5)
+            if hla_score > upstream_score or abs(hla_score-upstream_score) <= 1e-4:
+                better += 1
+
+            if PRINT_test:
+                print('[upstream vs PP-HRL]: ', upstream_score, hla_score)
+                print('[better]', better)
+                print('[use upstream]', use_upstream)
+                print('--'*10)
+                # if i % 50 == 0:
+                #     tt = input('pause')
+
+        # f = open('./data/result/criteo_farFill/pp_hddpg_reward.txt', 'w')
+        # print(reward_list, file=f)
+
+        print('------'*2, 'Testing', '------'*2)
+        print('[avg NDCG@6]: ', dynamic_ndcg / (MAX_EPISODES * (1 - split_rate)))
+        print('[avg simulator score]: ', reward_sum/(MAX_EPISODES*(1-split_rate)))
+        print('[better percentage]: ', better/(MAX_EPISODES*(1-split_rate)))
+        print('------'*5)
 
     return base_gmv_list, test_gmv_list, better
 
