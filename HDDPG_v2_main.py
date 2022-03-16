@@ -140,7 +140,7 @@ def train_hDDPG_with_pvpredict(PRINT_train = False, PRINT_test = False):
             f.close()
 
         saver = tf.train.Saver()
-        save_name = "./data/model/HLA_LLA_0618_" + int(epoch) + ".ckpt"
+        save_name = "./data/model/HLA_LLA_0618_" + str(int(epoch)) + ".ckpt"
         saver.save(sess, save_name)
 
 

@@ -942,11 +942,11 @@ class Env_low_level(object):
                     # match_rel = ideal_item.rel
                     break
             if match is False: # in action, not in proto pv, raise rel
-                pv[i]['rel'] = 1.0
+                pv[i]['rel'] += 1.0
 
         for i in range(self.k, self.canditate_size): # exposed, not in action, decline rel
-            if float(pv[i]['rel']) == 1.0:
-                pv[i]['rel'] = 0.5
+            if float(pv[i]['rel']) >= 0.5:
+                pv[i]['rel'] -= 0.5
                 
 class Env_high_level_v3(object):
     def __init__(self):
